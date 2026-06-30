@@ -1,0 +1,23 @@
+.env
+.env.local
+__pycache__/
+*.py[cod]
+.streamlit/secrets.toml
+
+# Local data & caches
+candidates_cache.json
+replacements.json
+phrases_cache.json
+
+# Excel (upload via UI in production)
+*.xlsx
+~$*.xlsx
+
+# Temp / auto output
+auto_pending.xlsx
+auto.xlsx
+manual.xlsx
+
+# OS
+.DS_Store
+Thumbs.db
