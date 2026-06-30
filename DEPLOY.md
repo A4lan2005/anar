@@ -40,20 +40,49 @@
 
 ## Шаг 2. Neon — база данных
 
-1. [console.neon.tech](https://console.neon.tech) → **New Project** (регион ближе к пользователям, например `aws-eu-central-1`).
+### Вариант A: уже есть проекты в Neon (ваш случай)
 
-2. На вкладке **Dashboard** скопируйте **Connection string** → **Pooled connection**  
-   Формат:
-   ```
-   postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
-   ```
+Не обязательно создавать новый проект — **достаточно одной пустой базы** в существующем:
 
-3. Откройте **SQL Editor** и выполните содержимое файла `schema.sql` из репозитория  
-   (либо пропустите — приложение создаст таблицы при первом запуске).
+1. [console.neon.tech](https://console.neon.tech) → выберите проект (у вас, например, `neon-cerulean-yacht`).
 
-4. Free-tier Neon:
-   - ~**0.5 GB** хранилища — хватит на **десятки сессий** с Excel ~1 MB
-   - проект «засыпает» при неактивности — первый запрос после паузы может быть медленнее
+2. На **Project dashboard** нажмите чёрную кнопку **Connect** (справа вверху).
+   - Вкладка **Connection string**
+   - Режим: **Pooled connection** (не Direct)
+   - Скопируйте строку — в конце будет `/neondb?sslmode=require`  
+     Это **дефолтная база `neondb`** — отдельно создавать database **не нужно**.
+
+3. **SQL Editor** — иконка в левом сайдбаре (лист с символом SQL) → вставьте содержимое `schema.sql` из репозитория → **Run**.
+
+   Если таблицы уже есть — ничего страшного, `CREATE TABLE IF NOT EXISTS` их не сломает.
+
+> **Где «Databases»?** В новом UI Neon этого пункта часто нет. Проект = одна Postgres-инстанция, база по умолчанию — `neondb`. Для этого app этого достаточно.
+
+Для одной общей сессии и одного Excel ~1 MB хватит **нескольких мегабайт** — ваш **0.17 GB** более чем достаточно.
+
+### Вариант B: кнопка «New project» недоступна (Neon через Vercel)
+
+Если при «+ New project» видите подсказку *«use the Neon Postgres integration in Vercel»* — аккаунт привязан к **Vercel Marketplace**. Это нормально:
+
+| Что делать | Как |
+|------------|-----|
+| **Проще всего** | Использовать **существующий** проект/БД (вариант A) |
+| Новая БД через Vercel | Vercel → Project → **Storage** → **Neon** → Create database → скопировать `DATABASE_URL` |
+| Отдельный Neon без Vercel | Зарегистрироваться на [neon.tech](https://neon.tech) **другим email** или отвязать интеграцию — только если нужен чистый standalone-аккаунт |
+
+> **Важно:** приложение крутится на **Streamlit Cloud**, не на Vercel. Neon из Vercel — это просто способ получить `DATABASE_URL`; строка подключения работает откуда угодно (Streamlit, локально).
+
+### Connection string
+
+Формат (pooled):
+```
+postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
+```
+
+### Free-tier
+
+- ~**0.5 GB** на проект — для одной общей книги и кэша более чем достаточно
+- проект «засыпает» при неактивности — первый запрос после паузы может быть медленнее
 
 ---
 

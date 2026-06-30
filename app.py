@@ -1,4 +1,3 @@
-import json
 import sys
 from pathlib import Path
 
@@ -12,22 +11,20 @@ from src.app_state import (
     apply_and_save,
     app_url,
     bootstrap_local_workbook,
+    bootstrap_workspace,
+    get_candidates_cache,
+    get_phrase_index,
+    get_phrases,
+    get_replacements,
     init_app_state,
-    persist_phrases_cache,
     refresh_shared_state,
     render_downloads,
     render_upload,
     resolve_session,
     save_progress_index,
 )
-from src.excel_io import collect_phrase_index, collect_unique_phrases
 from src.gemini_rewrite import suggest_replacements
-from src.session_store import (
-    load_candidates,
-    load_replacements,
-    save_candidates,
-    save_replacements,
-)
+from src.session_store import save_candidates, save_replacements
 
 
 def phrase_context(meta: dict | None) -> str:
@@ -51,12 +48,14 @@ def get_candidates(phrase: str, cache: dict, context: str, paths) -> dict:
     with st.spinner("Запрос к Gemini..."):
         result = suggest_replacements(phrase, context)
     cache[phrase] = result
-    save_candidates(paths, cache)
+    st.session_state.candidates = cache
+    save_candidates(paths, cache, persist_db=False)
     return result
 
 
 def pick_replacement(paths, replacements, phrase, value, phrases, global_idx):
     replacements[phrase] = value
+    st.session_state.replacements = replacements
     save_replacements(paths, replacements)
     if global_idx < len(phrases) - 1:
         global_idx += 1
@@ -79,7 +78,7 @@ def main():
             if st.button("Обновить с сервера"):
                 refresh_shared_state(paths)
                 st.rerun()
-            st.caption("Нажмите, если коллега внёс изменения.")
+            st.caption("Только по кнопке — не при каждом клике.")
         else:
             st.warning("DATABASE_URL не задан — данные только на этом сервере.")
 
@@ -93,14 +92,16 @@ def main():
     if not render_upload(paths):
         return
 
-    refresh_shared_state(paths)
+    bootstrap_workspace(paths)
 
-    workbook = paths.manual
-    phrases = collect_unique_phrases(workbook, cache_path=paths.phrases_cache)
-    persist_phrases_cache(paths)
-    phrase_index = collect_phrase_index(workbook)
-    replacements = load_replacements(paths)
-    cache = load_candidates(paths)
+    phrases = get_phrases()
+    phrase_index = get_phrase_index()
+    replacements = get_replacements()
+    cache = get_candidates_cache()
+
+    if not phrases:
+        st.warning("Не удалось прочитать фразы из Excel.")
+        return
 
     if "global_idx" not in st.session_state:
         st.session_state.global_idx = 0

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import tempfile
@@ -71,6 +72,7 @@ def restore_blob_to_path(session_id: str, blob_key: str, path: Path) -> bool:
 
 
 def sync_session_to_disk(paths: SessionPaths) -> None:
+    """Full sync — Excel + JSON blobs. Use sparingly (startup / refresh / upload)."""
     if not db.db_enabled():
         return
     db.ensure_session(paths.session_id)
@@ -80,6 +82,33 @@ def sync_session_to_disk(paths: SessionPaths) -> None:
     restore_blob_to_path(paths.session_id, BLOB_REPLACEMENTS, paths.replacements)
     restore_blob_to_path(paths.session_id, BLOB_CANDIDATES, paths.candidates)
     restore_blob_to_path(paths.session_id, BLOB_PHRASES_CACHE, paths.phrases_cache)
+
+
+def sync_meta_from_db(paths: SessionPaths) -> tuple[dict, int]:
+    """Light sync — only replacements + cursor. Fast for collaborator refresh."""
+    replacements: dict = {}
+    global_idx = 0
+    if not db.db_enabled():
+        return replacements, global_idx
+
+    data = db.load_json(paths.session_id, BLOB_REPLACEMENTS, None)
+    if data is not None:
+        replacements = data
+        paths.replacements.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    global_idx = db.get_global_idx(paths.session_id)
+    return replacements, global_idx
+
+
+def ensure_workbook_on_disk(paths: SessionPaths) -> None:
+    if paths.manual.exists():
+        return
+    if db.db_enabled():
+        restore_blob_to_path(paths.session_id, BLOB_MANUAL, paths.manual)
+        if not paths.source.exists():
+            restore_blob_to_path(paths.session_id, BLOB_SOURCE, paths.source)
 
 
 def ingest_upload(paths: SessionPaths, uploaded_bytes: bytes, filename: str) -> None:
@@ -103,53 +132,27 @@ def ingest_upload(paths: SessionPaths, uploaded_bytes: bytes, filename: str) -> 
 
 
 def save_replacements(paths: SessionPaths, replacements: dict) -> None:
-    import json
-
     paths.replacements.write_text(
         json.dumps(replacements, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     if db.db_enabled():
-        persist_json_file(paths.session_id, BLOB_REPLACEMENTS, paths.replacements)
+        db.save_json(paths.session_id, BLOB_REPLACEMENTS, replacements)
 
 
-def load_replacements(paths: SessionPaths) -> dict:
-    import json
-
-    if db.db_enabled():
-        data = db.load_json(paths.session_id, BLOB_REPLACEMENTS, None)
-        if data is not None:
-            paths.replacements.write_text(
-                json.dumps(data, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            return data
-
+def load_replacements_from_disk(paths: SessionPaths) -> dict:
     if paths.replacements.exists():
         return json.loads(paths.replacements.read_text(encoding="utf-8"))
     return {}
 
 
-def save_candidates(paths: SessionPaths, cache: dict) -> None:
-    import json
-
+def save_candidates(paths: SessionPaths, cache: dict, *, persist_db: bool = False) -> None:
     paths.candidates.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
-    if db.db_enabled():
-        persist_json_file(paths.session_id, BLOB_CANDIDATES, paths.candidates)
+    if persist_db and db.db_enabled():
+        db.save_json(paths.session_id, BLOB_CANDIDATES, cache)
 
 
-def load_candidates(paths: SessionPaths) -> dict:
-    import json
-
-    if db.db_enabled():
-        data = db.load_json(paths.session_id, BLOB_CANDIDATES, None)
-        if data is not None:
-            paths.candidates.write_text(
-                json.dumps(data, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            return data
-
+def load_candidates_from_disk(paths: SessionPaths) -> dict:
     if paths.candidates.exists():
         return json.loads(paths.candidates.read_text(encoding="utf-8"))
     return {}

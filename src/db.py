@@ -13,16 +13,36 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
+_pool = None
 
 
 def db_enabled() -> bool:
     return bool(DATABASE_URL.strip())
 
 
+def _get_pool():
+    global _pool
+    if _pool is None and db_enabled():
+        from psycopg_pool import ConnectionPool
+
+        _pool = ConnectionPool(
+            conninfo=DATABASE_URL,
+            min_size=1,
+            max_size=4,
+            kwargs={"autocommit": True},
+        )
+    return _pool
+
+
 @contextmanager
 def _connection():
     if not db_enabled():
         raise RuntimeError("DATABASE_URL is not set")
+    pool = _get_pool()
+    if pool is not None:
+        with pool.connection() as conn:
+            yield conn
+        return
     import psycopg
 
     with psycopg.connect(DATABASE_URL) as conn:
